@@ -2,11 +2,22 @@ import { useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => res(reader.result);
+    reader.onerror = (e) => rej(e);
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Home() {
   const [mode, setMode] = useState("generate");
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("photoreal");
   const [size, setSize] = useState("1024");
+  const [editType, setEditType] = useState("inpaint");
+  const [imageFile, setImageFile] = useState(null);
   const [resultImage, setResultImage] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -45,19 +56,27 @@ export default function Home() {
   };
 
   const handleEdit = async () => {
+    if (!imageFile) {
+      setError("Please upload an image to edit.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
+      const imageBase64 = await toBase64(imageFile);
+
       const res = await fetch(`${API_BASE}/api/edit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: effectivePrompt(),
+          imageBase64,
+          editType,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Generation failed");
+      if (!res.ok) throw new Error(data.error || "Edit failed");
       const url = `data:image/png;base64,${data.image}`;
       setResultImage(url);
       setHistory((prev) => [url, ...prev].slice(0, 3));
@@ -81,10 +100,11 @@ export default function Home() {
       <div className="w-full max-w-5xl">
         <header className="mb-8">
           <h1 className="text-3xl md:text-4xl font-semibold mb-2 text-center">
-            AI Image Generator
+            AI Image Studio
           </h1>
           <p className="text-slate-300 text-center max-w-2xl mx-auto">
-            Create stunning images from text prompts. Powered by AI.
+            Generate images from text or edit existing images using natural-language prompts.
+            Powered by AI.
           </p>
         </header>
 
@@ -107,7 +127,7 @@ export default function Home() {
                 : "bg-slate-800 text-slate-300 hover:bg-slate-700"
             }`}
           >
-            Variation
+            Edit
           </button>
         </div>
 
@@ -124,7 +144,9 @@ export default function Home() {
                 placeholder={
                   mode === "generate"
                     ? "A futuristic cityscape at sunset with flying cars, high detail, cinematic lighting"
-                    : "A serene mountain lake at sunrise, crystal clear water, photorealistic, highly detailed"
+                    : editType === "remove-background"
+                    ? "No prompt needed for background removal"
+                    : "Change the shirt color to blue, add mountains in the background"
                 }
               />
             </div>
@@ -162,12 +184,38 @@ export default function Home() {
             )}
 
             {mode === "edit" && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                <p className="text-sm text-slate-300">
-                  <span className="font-medium">Variation Mode:</span> Generate alternative versions
-                  of your concept by describing different styles or variations.
-                </p>
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-slate-200">
+                    Upload Image
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white hover:file:bg-sky-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-slate-200">
+                    Edit Type
+                  </label>
+                  <select
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value)}
+                  >
+                    <option value="inpaint">Modify / Inpaint</option>
+                    <option value="remove-background">Remove Background</option>
+                    <option value="transform">Transform Image</option>
+                  </select>
+                </div>
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
+                  <p className="text-xs text-slate-300">
+                    <strong>Examples:</strong> "Change shirt to red", "Remove background", "Add sunset sky"
+                  </p>
+                </div>
+              </>
             )}
 
             {error && (
@@ -178,10 +226,10 @@ export default function Home() {
 
             <button
               onClick={mode === "generate" ? handleGenerate : handleEdit}
-              disabled={loading || !prompt}
+              disabled={loading || (!prompt && editType !== "remove-background")}
               className="w-full px-5 py-3 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-semibold transition-colors"
             >
-              {loading ? "Processing..." : mode === "generate" ? "Generate Image" : "Create Variation"}
+              {loading ? "Processing..." : mode === "generate" ? "Generate Image" : "Apply Edit"}
             </button>
           </section>
 
@@ -195,7 +243,7 @@ export default function Home() {
                 />
               ) : (
                 <p className="text-sm text-slate-400 text-center px-4">
-                  Your AI-generated image will appear here.
+                  Your AI-generated or edited image will appear here.
                 </p>
               )}
             </div>
