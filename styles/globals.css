@@ -1,0 +1,13 @@
+/* styles/globals.css */
+@import "tailwindcss";
+@reference "tailwindcss/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 min-h-screen;
+  }
+}
